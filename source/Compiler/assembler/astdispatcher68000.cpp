@@ -294,7 +294,7 @@ void ASTDispatcher68000::dispatch(QSharedPointer<NodeBlock> node)
 
     }
     as->VarDeclEnds();
-//    if (node->m_decl.count()!=0)
+    if (node->m_decl.count()!=0)
         as->Asm(" 	CNOP 0,4");
 
     if (!blockLabel && hasLabel) {
@@ -660,6 +660,14 @@ void ASTDispatcher68000::StoreVariable(QSharedPointer<NodeVar> n)
             //qDebug() << "Loading array: expression";
             LoadVariable(n->m_expr);
             QString d1 = as->m_varStack.pop();
+            if (n->getArrayType(as)==TokenType::INTEGER) {
+                as->Asm("lsl #1,"+d1);
+            }
+            if (n->getArrayType(as)==TokenType::LONG) {
+                as->Asm("lsl #2,"+d1);
+            }
+
+
             //qDebug() << "Popping varstack: " <<d1;
 //            as->Comment("Type: " + TokenType::getType(n->getType(as)));
             if (n->getType(as)==TokenType::POINTER)
@@ -707,6 +715,13 @@ void ASTDispatcher68000::LoadVariable(QSharedPointer<NodeVar> n)
         m_clearFlag=true;
         LoadVariable(n->m_expr);
         QString d1 = as->m_varStack.pop();
+        if (n->getArrayType(as)==TokenType::INTEGER) {
+            as->Asm("lsl #1,"+d1);
+        }
+        if (n->getArrayType(as)==TokenType::LONG) {
+            as->Asm("lsl #2,"+d1);
+        }
+        //qDebug() << "TYPE: "<< TokenType::getType(n->getArrayType(as));
         //qDebug() << "Popping varstack: " <<d1;
       //  as->Comment("Type : " + TokenType::getType(n->getType(as)));
 //        as->Comment("Raw type: " + TokenType::getType(as->m_symTab->Lookup(n->value, n->m_op.m_lineNumber)->getTokenType()));
@@ -1161,7 +1176,7 @@ void ASTDispatcher68000::BuildToCmp(QSharedPointer<Node> node)
 */
 //    as->Term();
 
-    if (node->m_left->getValue(as)!="") {
+    if (node->m_left->isPure()) {
         if (node->m_right->isPureNumeric())
         {
             as->Comment("Compare with pure num / var optimization");
@@ -1188,9 +1203,16 @@ void ASTDispatcher68000::BuildToCmp(QSharedPointer<Node> node)
         }
     }
 
+    node->m_left->Accept(this);
+    QString d0 = as->m_varStack.pop();
+    QString tmp = as->m_regAcc.Get();
     node->m_right->Accept(this);
+    QString d1 = as->m_varStack.pop();
+    as->m_regAcc.Pop(tmp);
+//    qDebug() << "VARSTACK" <<d0 << d1;
 
-    TransformVariable(as,"cmp",qSharedPointerDynamicCast<NodeVar>(node->m_left), as->m_varStack.pop());
+    as->Asm("cmp "+d1+"," +d0);
+    //TransformVariable(as,"cmp",node->m_left, as->m_varStack.pop());
 
         // Perform a full compare : create a temp variable
 //        QString tmpVar = as->m_regAcc.Get();//as->StoreInTempVar("binary_clause_temp");
